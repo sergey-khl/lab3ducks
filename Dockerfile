@@ -1,7 +1,7 @@
 # parameters
-ARG REPO_NAME="REPO_NAME_HERE"
-ARG DESCRIPTION="DESCRIPTION_HERE"
-ARG MAINTAINER="YOUR_FULL_NAME (YOUR_EMAIL_ADDRESS)"
+ARG REPO_NAME="lab3ducks"
+ARG DESCRIPTION="lab 3 of 412"
+ARG MAINTAINER="Sergey Khlynovskiy (sergeykhlynovskiy@gmail.com)"
 # pick an icon from: https://fontawesome.com/v4.7.0/icons/
 ARG ICON="cube"
 
