@@ -13,11 +13,11 @@ ticks_per_meter: 656
 # Lateral distance between the center of the two wheels (in meters)
 wheelbase: 0.1
 
-# origin reference frame name
-origin_frame: "~/odom"
+# origin reference frame name was odom
+origin_frame: "~/world"
 
-# target reference frame name
-target_frame: "~/base_footprint"
+# target reference frame name was base_footprint
+target_frame: "~/odometry"
 
 # Verbose output
 debug: False

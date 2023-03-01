@@ -10,9 +10,10 @@ from geometry_msgs.msg import Quaternion, Twist, Pose, Point, Vector3, Transform
 
 from duckietown.dtros import DTROS, NodeType
 from duckietown_msgs.msg import WheelEncoderStamped
-from tf2_ros import TransformBroadcaster
+from tf2_ros import TransformBroadcaster, StaticTransformBroadcaster
 
 from tf import transformations as tr
+
 
 
 class DeadReckoningNode(DTROS):
@@ -43,7 +44,8 @@ class DeadReckoningNode(DTROS):
         super(DeadReckoningNode, self).__init__(node_name=node_name, node_type=NodeType.LOCALIZATION)
         self.node_name = node_name
 
-        self.veh = rospy.get_param("~veh")
+        #self.veh = rospy.get_param("~veh")
+        self.veh = 'csc22906'
         self.publish_hz = rospy.get_param("~publish_hz")
         self.encoder_stale_dt = rospy.get_param("~encoder_stale_dt")
         self.ticks_per_meter = rospy.get_param("~ticks_per_meter")
@@ -76,9 +78,9 @@ class DeadReckoningNode(DTROS):
         self.total_dist = 0
 
         # Setup subscribers
-        self.sub_encoder_left = message_filters.Subscriber("~left_wheel", WheelEncoderStamped)
+        self.sub_encoder_left = message_filters.Subscriber(f"/{self.veh}/left_wheel_encoder_node/tick", WheelEncoderStamped)
 
-        self.sub_encoder_right = message_filters.Subscriber("~right_wheel", WheelEncoderStamped)
+        self.sub_encoder_right = message_filters.Subscriber(f"/{self.veh}/right_wheel_encoder_node/tick", WheelEncoderStamped)
 
         # Setup the time synchronizer
         self.ts_encoders = message_filters.ApproximateTimeSynchronizer(
@@ -95,6 +97,8 @@ class DeadReckoningNode(DTROS):
         self._print_every_sec = 30
         # tf broadcaster for odometry TF
         self._tf_broadcaster = TransformBroadcaster()
+
+
 
         self.loginfo("Initialized")
 
