@@ -7,6 +7,7 @@ import numpy as np
 from duckietown.dtros import DTROS, NodeType
 from std_msgs.msg import String
 from sensor_msgs.msg import CompressedImage
+from geometry_msgs.msg import Quaternion, Pose, Point
 import yaml
 import apriltag as at
 
@@ -40,6 +41,9 @@ class AugmentedRealityNode(DTROS):
         # construct publisher
         self.sub_img = rospy.Subscriber(f'/{self.veh}/camera_node/image/compressed', CompressedImage, self.get_img)
         self.pub_img = rospy.Publisher(f'/{self.veh}/{node_name}/{Path(self.map_file).stem}/image/compressed', CompressedImage, queue_size=1)
+        self.pub_loc = rospy.Publisher(f'/{self.veh}/teleport', Pose, queue_size=1) 
+
+        
 
     def get_img(self, msg):
         img = np.frombuffer(msg.data, np.uint8)
@@ -49,6 +53,7 @@ class AugmentedRealityNode(DTROS):
         undistorted = cv2.undistort(img2, self.cam_matrix, self.distort_coeff, None, self.new_cam_matrix)
         x, y, w, h = self.roi
         self.undistorted = undistorted[y:y+h, x:x+w]
+        
 
 
     def detect_april(self):
@@ -76,19 +81,28 @@ class AugmentedRealityNode(DTROS):
             tagID = str(r.tag_id)
             cv2.putText(self.undistorted, tagID, (ptA[0], ptA[1] - 15),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-            print("[INFO] tag id: {}".format(tagID))
+            #print("[INFO] tag id: {}".format(tagID))
+            
             # 94, 93, 62, 162, 201, 153
         
 
     def run(self):
         rate = rospy.Rate(1)
         while not rospy.is_shutdown():
+            
             if self.undistorted is not None:
+                
                 self.detect_april()
                 new_img = CompressedImage()
                 new_img.data = cv2.imencode('.jpg', self.undistorted)[1].tobytes()
                 self.pub_img.publish(new_img)
-                rate.sleep()
+                
+            else:
+
+                # init location
+                pose = Pose(Point(0.32, 0.32, 0), Quaternion(0, 0, 0, 1))
+                self.pub_loc.publish(pose)
+        rate.sleep()
 
     def readYamlFile(self,fname):
         """

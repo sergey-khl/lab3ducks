@@ -88,6 +88,8 @@ class DeadReckoningNode(DTROS):
         )
         self.ts_encoders.registerCallback(self.cb_ts_encoders)
 
+        self.sub_teleport = rospy.Subscriber(f"/{self.veh}/teleport", Pose, self.teleport)
+
         # Setup publishers
         self.pub = rospy.Publisher("~odom", Odometry, queue_size=10)
 
@@ -98,9 +100,13 @@ class DeadReckoningNode(DTROS):
         # tf broadcaster for odometry TF
         self._tf_broadcaster = TransformBroadcaster()
 
-
-
         self.loginfo("Initialized")
+
+    def teleport(self, pose):
+        self.x = pose.position.x
+        self.y = pose.position.y
+        self.z = pose.position.z
+        self.q = [pose.orientation.x, pose.orientation.y, pose.orientation.z]
 
     def cb_ts_encoders(self, left_encoder, right_encoder):
         timestamp_now = rospy.get_time()
