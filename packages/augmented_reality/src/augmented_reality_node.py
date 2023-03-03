@@ -7,9 +7,14 @@ import numpy as np
 from duckietown.dtros import DTROS, NodeType
 from std_msgs.msg import String
 from sensor_msgs.msg import CompressedImage
-from geometry_msgs.msg import Quaternion, Pose, Point
+from nav_msgs.msg import Odometry
+from geometry_msgs.msg import Quaternion, Pose, Point, TransformStamped, Vector3, Transform
 import yaml
-import apriltag as at
+from dt_apriltags import Detector
+
+from tf2_ros import TransformBroadcaster
+
+from tf import transformations as tr
 
 class AugmentedRealityNode(DTROS):
 
@@ -17,12 +22,10 @@ class AugmentedRealityNode(DTROS):
         # initialize the DTROS parent class
         super(AugmentedRealityNode, self).__init__(node_name=node_name, node_type=NodeType.GENERIC)
         self.veh = rospy.get_param("~veh")
-        self.map_file = rospy.get_param("~map_file")
+ 
         #self.calibration_file = f'/data/config/calibrations/camera_intrinsic/{self.veh}.yaml'
         self.calibration_file = f'/data/config/calibrations/camera_intrinsic/default.yaml'
-        
-
-        self.map = self.readYamlFile(self.map_file)
+ 
         self.calibration = self.readYamlFile(self.calibration_file)
 
         self.img_width = self.calibration['image_width']
@@ -33,15 +36,23 @@ class AugmentedRealityNode(DTROS):
         self.new_cam_matrix, self.roi = cv2.getOptimalNewCameraMatrix(self.cam_matrix, self.distort_coeff, (self.img_width, self.img_height), 1, (self.img_width, self.img_height))
 
         # setup april tag detector
-        options = at.DetectorOptions(families="tag36h11")
-        self.detector = at.Detector(options)
+        self.detector = Detector(searchpath=['apriltags'],
+                       families='tag36h11',
+                       nthreads=1,
+                       quad_decimate=1.0,
+                       quad_sigma=0.0,
+                       refine_edges=1,
+                       decode_sharpening=0.25,
+                       debug=0)
 
         self.undistorted = None
     
         # construct publisher
-        self.sub_img = rospy.Subscriber(f'/{self.veh}/camera_node/image/compressed', CompressedImage, self.get_img)
-        self.pub_img = rospy.Publisher(f'/{self.veh}/{node_name}/{Path(self.map_file).stem}/image/compressed', CompressedImage, queue_size=1)
+        self.sub_img = rospy.Subscriber(f'/{self.veh}/camera_node/image/compressed', CompressedImage, self.get_img, queue_size = 1)
+        self.pub_img = rospy.Publisher(f'/{self.veh}/{node_name}/image/compressed', CompressedImage, queue_size=1)
         self.pub_loc = rospy.Publisher(f'/{self.veh}/teleport', Pose, queue_size=1) 
+
+        self._tf_broadcaster = TransformBroadcaster()
 
         
 
@@ -58,9 +69,11 @@ class AugmentedRealityNode(DTROS):
 
     def detect_april(self):
         # https://pyimagesearch.com/2020/11/02/apriltag-with-python/
+        # https://github.com/duckietown/lib-dt-apriltags/blob/master/test/test.py
         # april tag detection
         
-        results = self.detector.detect(self.undistorted)
+        results = self.detector.detect(self.undistorted, estimate_tag_pose=True, camera_params=(self.cam_matrix[0,0], self.cam_matrix[1,1], self.cam_matrix[0,2], self.cam_matrix[1,2]), tag_size=0.065)
+
         for r in results:
             # extract the bounding box (x, y)-coordinates for the AprilTag
             # and convert each of the (x, y)-coordinate pairs to integers
@@ -74,16 +87,32 @@ class AugmentedRealityNode(DTROS):
             cv2.line(self.undistorted, ptB, ptC, (0, 255, 0), 2)
             cv2.line(self.undistorted, ptC, ptD, (0, 255, 0), 2)
             cv2.line(self.undistorted, ptD, ptA, (0, 255, 0), 2)
-            # draw the center (x, y)-coordinates of the AprilTag
-            (cX, cY) = (int(r.center[0]), int(r.center[1]))
-            cv2.circle(self.undistorted, (cX, cY), 5, (0, 0, 255), -1)
-            # draw the tag family on the image
-            tagID = str(r.tag_id)
-            cv2.putText(self.undistorted, tagID, (ptA[0], ptA[1] - 15),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-            #print("[INFO] tag id: {}".format(tagID))
             
-            # 94, 93, 62, 162, 201, 153
+            # draw the tag id on the image center
+            (cX, cY) = (int(r.center[0]), int(r.center[1]))
+            tagID = str(r.tag_id)
+            cv2.putText(self.undistorted, tagID, (cX - 15, cY),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            t = tr.translation_from_matrix(tr.translation_matrix(np.array(r.pose_t).reshape(3)))
+
+            q = np.append(r.pose_R, [[0],[0],[0]], axis =1)
+            q = np.append(q, [[0,0,0, 1]], axis =0)
+            q = tr.quaternion_from_matrix(q)
+
+            # send predicted april tag position
+            odom = Odometry()
+            odom.header.stamp = rospy.Time.now()  # Ideally, should be encoder time
+            odom.header.frame_id = f"{self.veh}/camera_optical_frame"
+
+            self._tf_broadcaster.sendTransform(
+                TransformStamped(
+                    header=odom.header,
+                    child_frame_id=f"{self.veh}/at_{r.tag_id}_estimate",
+                    transform=Transform(
+                        translation=Vector3(*t), rotation=Quaternion(*q)
+                    ),
+                )
+            )
         
 
     def run(self):
@@ -96,13 +125,13 @@ class AugmentedRealityNode(DTROS):
                 new_img = CompressedImage()
                 new_img.data = cv2.imencode('.jpg', self.undistorted)[1].tobytes()
                 self.pub_img.publish(new_img)
-                
+                rate.sleep()
             else:
 
                 # init location
                 pose = Pose(Point(0.32, 0.3, 0), Quaternion(0, 0, 0, 1))
                 self.pub_loc.publish(pose)
-        rate.sleep()
+            
 
     def readYamlFile(self,fname):
         """
@@ -120,19 +149,6 @@ class AugmentedRealityNode(DTROS):
                 rospy.signal_shutdown()
                 return
 
-    def draw_segment(self, image, pt_x, pt_y, color):
-        defined_colors = {
-            'red': ['rgb', [1, 0, 0]],
-            'green': ['rgb', [0, 1, 0]],
-            'blue': ['rgb', [0, 0, 1]],
-            'yellow': ['rgb', [1, 1, 0]],
-            'magenta': ['rgb', [1, 0 , 1]],
-            'cyan': ['rgb', [0, 1, 1]],
-            'white': ['rgb', [1, 1, 1]],
-            'black': ['rgb', [0, 0, 0]]}
-        _color_type, [r, g, b] = defined_colors[color]
-        cv2.line(image, (pt_x[0], pt_y[0]), (pt_x[1], pt_y[1]), (b * 255, g * 255, r * 255), 5)
-        return image
 
 if __name__ == '__main__':
     # create the node
