@@ -100,7 +100,7 @@ class AugmentedRealityNode(DTROS):
             else:
 
                 # init location
-                pose = Pose(Point(0.32, 0.32, 0), Quaternion(0, 0, 0, 1))
+                pose = Pose(Point(0.32, 0.3, 0), Quaternion(0, 0, 0, 1))
                 self.pub_loc.publish(pose)
         rate.sleep()
 

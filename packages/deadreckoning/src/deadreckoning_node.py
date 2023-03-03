@@ -106,7 +106,7 @@ class DeadReckoningNode(DTROS):
         self.x = pose.position.x
         self.y = pose.position.y
         self.z = pose.position.z
-        self.q = [pose.orientation.x, pose.orientation.y, pose.orientation.z]
+        self.q = [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w]
 
     def cb_ts_encoders(self, left_encoder, right_encoder):
         timestamp_now = rospy.get_time()

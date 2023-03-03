@@ -25,5 +25,6 @@
         <node pkg="tf2_ros" type="static_transform_publisher" name="at_94_static" args="1.65 2.84 0.075 5.49779 0 4.7124 $(arg veh)/world $(arg veh)/at_94_static"/>
         <node pkg="tf2_ros" type="static_transform_publisher" name="at_93_static" args="0.17 2.84 0.075 0.7854 0 4.7124 $(arg veh)/world $(arg veh)/at_93_static"/>
 
+        <node pkg="tf2_ros" type="static_transform_publisher" name="robo_to_odom" args="0 0 0 0 0 0 $(arg veh)/odometry $(arg veh)/footprint"/>
     </group>
 </launch>
