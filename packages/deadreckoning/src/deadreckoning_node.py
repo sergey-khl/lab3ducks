@@ -44,8 +44,8 @@ class DeadReckoningNode(DTROS):
         super(DeadReckoningNode, self).__init__(node_name=node_name, node_type=NodeType.LOCALIZATION)
         self.node_name = node_name
 
-        #self.veh = rospy.get_param("~veh")
-        self.veh = 'csc22906'
+        self.veh = rospy.get_param("~veh")
+        #self.veh = 'csc22906'
         self.publish_hz = rospy.get_param("~publish_hz")
         self.encoder_stale_dt = rospy.get_param("~encoder_stale_dt")
         self.ticks_per_meter = rospy.get_param("~ticks_per_meter")

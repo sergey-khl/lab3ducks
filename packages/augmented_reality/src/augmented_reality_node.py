@@ -16,10 +16,10 @@ class AugmentedRealityNode(DTROS):
     def __init__(self, node_name):
         # initialize the DTROS parent class
         super(AugmentedRealityNode, self).__init__(node_name=node_name, node_type=NodeType.GENERIC)
-        #self.veh = rospy.get_param("~veh")
-        self.veh = 'csc22906'
+        self.veh = rospy.get_param("~veh")
         self.map_file = rospy.get_param("~map_file")
-        self.calibration_file = f'/data/config/calibrations/camera_intrinsic/{self.veh}.yaml'
+        #self.calibration_file = f'/data/config/calibrations/camera_intrinsic/{self.veh}.yaml'
+        self.calibration_file = f'/data/config/calibrations/camera_intrinsic/default.yaml'
         
 
         self.map = self.readYamlFile(self.map_file)
