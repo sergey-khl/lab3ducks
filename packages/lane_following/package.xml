@@ -1,0 +1,11 @@
+<package>
+  <name>lane_following</name>
+  <version>0.1.0</version>
+  <description>
+  lane following implementation for a duckiebot
+  </description>
+  <maintainer email="JKValentine1@gmail.com">Justin Valentine</maintainer>
+  <license>None</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+</package>

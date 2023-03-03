@@ -4,6 +4,7 @@ from pathlib import Path
 import rospy
 import cv2
 import numpy as np
+
 from duckietown.dtros import DTROS, NodeType
 from std_msgs.msg import String
 from sensor_msgs.msg import CompressedImage
