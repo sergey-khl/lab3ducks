@@ -103,9 +103,9 @@ class DeadReckoningNode(DTROS):
         self.loginfo("Initialized")
 
     def teleport(self, point):
-        self.x = point.x
-        self.y = point.y
-        self.z = point.z
+        self.x = point.position.x
+        self.y = point.position.y
+        self.z = point.position.z
 
     def cb_ts_encoders(self, left_encoder, right_encoder):
         timestamp_now = rospy.get_time()

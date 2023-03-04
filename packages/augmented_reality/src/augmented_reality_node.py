@@ -158,14 +158,14 @@ class AugmentedRealityNode(DTROS):
 
             trans = self._tf_buffer.lookup_transform(f"{self.veh}/world", f"{self.veh}/robo_estimate", rospy.Time())
 
-            self.wizard([trans.transform.translation.x, trans.transform.translation.y, 0])
+            self.wizard(Point(*[trans.transform.translation.x, trans.transform.translation.y, 0]), trans.transform.rotation)
         except Exception as e:
             print(e)
             self.change_led_lights("white")
 
-    def wizard(self, trans):
-        point = Point(*trans)
-        self.pub_loc.publish(point)
+    def wizard(self, tran, rot):
+        pose = Pose(tran, rot)
+        self.pub_loc.publish(pose)
 
     def run(self):
         rate = rospy.Rate(1)
@@ -184,7 +184,7 @@ class AugmentedRealityNode(DTROS):
             else:
 
                 # init location
-                self.wizard([0.32, 0.3, 0])
+                self.wizard(Point(*[0.32, 0.3, 0]), Quaternion(*[0, 0, 0, 1]))
                 self.change_led_lights("white")
 
     def change_led_lights(self, color: str):
