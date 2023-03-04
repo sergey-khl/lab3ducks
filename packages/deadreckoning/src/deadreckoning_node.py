@@ -45,7 +45,7 @@ class DeadReckoningNode(DTROS):
         self.node_name = node_name
 
         self.veh = rospy.get_param("~veh")
-        #self.veh = 'csc22906'
+        
         self.publish_hz = rospy.get_param("~publish_hz")
         self.encoder_stale_dt = rospy.get_param("~encoder_stale_dt")
         self.ticks_per_meter = rospy.get_param("~ticks_per_meter")
@@ -102,11 +102,10 @@ class DeadReckoningNode(DTROS):
 
         self.loginfo("Initialized")
 
-    def teleport(self, pose):
-        self.x = pose.position.x
-        self.y = pose.position.y
-        self.z = pose.position.z
-        self.q = [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w]
+    def teleport(self, point):
+        self.x = point.x
+        self.y = point.y
+        self.z = point.z
 
     def cb_ts_encoders(self, left_encoder, right_encoder):
         timestamp_now = rospy.get_time()
