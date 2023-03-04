@@ -47,15 +47,20 @@ class AugmentedRealityNode(DTROS):
                        debug=0)
 
         self.undistorted = None
+        self.undistorted_color = None
     
         # construct publisher
         self.sub_img = rospy.Subscriber(f'/{self.veh}/camera_node/image/compressed', CompressedImage, self.get_img, queue_size = 1)
         self.pub_img = rospy.Publisher(f'/{self.veh}/{node_name}/image/compressed', CompressedImage, queue_size=1)
+
+
+        self.sub_img_color = rospy.Subscriber(f'/{self.veh}/camera_node/image/compressed', CompressedImage, self.get_img_color, queue_size = 1)
+        self.pub_img_color = rospy.Publisher(f'/{self.veh}/{node_name}/image_color/compressed', CompressedImage, queue_size=1)
+
         self.pub_loc = rospy.Publisher(f'/{self.veh}/teleport', Pose, queue_size=1) 
 
         self._tf_broadcaster = TransformBroadcaster()
 
-        
 
     def get_img(self, msg):
         img = np.frombuffer(msg.data, np.uint8)
@@ -66,6 +71,15 @@ class AugmentedRealityNode(DTROS):
         x, y, w, h = self.roi
         self.undistorted = undistorted[y:y+h, x:x+w]
         
+
+    def get_img_color(self, msg):
+        img = np.frombuffer(msg.data, np.uint8)
+        img2 = cv2.imdecode(img, 1)     
+
+        # https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html
+        undistorted = cv2.undistort(img2, self.cam_matrix, self.distort_coeff, None, self.new_cam_matrix)
+        x, y, w, h = self.roi
+        self.undistorted_color = undistorted[y:y+h, x:x+w]
 
 
     def detect_april(self):
@@ -120,13 +134,19 @@ class AugmentedRealityNode(DTROS):
         rate = rospy.Rate(1)
         while not rospy.is_shutdown():
             
-            if self.undistorted is not None:
+            if self.undistorted is not None and self.undistorted_color is not None:
                 
                 self.detect_april()
                 new_img = CompressedImage()
                 new_img.data = cv2.imencode('.jpg', self.undistorted)[1].tobytes()
                 self.pub_img.publish(new_img)
+
+                new_img_c = CompressedImage()
+                new_img_c.data = cv2.imencode('.jpg', self.undistorted_color)[1].tobytes()
+                self.pub_img_color.publish(new_img_c)
+                
                 rate.sleep()
+
             else:
 
                 # init location
