@@ -16,30 +16,35 @@ class LaneTrackingNode(DTROS):
         # initialize the DTROS parent class
         super(LaneTrackingNode, self).__init__(node_name=node_name, node_type=NodeType.GENERIC)
 
+        # -- lane tracking varibles --
         self.veh = rospy.get_param("~veh")
-        self.draw = True
+        self.draw = False
         self.english = False
         self.linear_speed = 3
-        self.yellow_line_offset = 5
-        self.min_contour_lenght_white = 20
-        self.horozontal_road_line_offset = 10
-        self.road_marker_offset = 10
+        self.yellow_line_offset = 40
+        self.min_contour_lenght_white = 40
+        self.horozontal_road_line_offset = 40
+        self.road_marker_offset = 40
         
+        # -- PID varables --
+        self.proportionalGain = 1/20
+        self.integralGain = 1
+        self.derivativeGain = 1
+
         # -- euclidian image --
-        self.img_euclid = None
+        self.img_raw = None
     
-        # -- subscribers -- 
-        self.img_sub = rospy.Subscriber(f'/{self.veh}/augmented_reality_node/image_color/compressed', CompressedImage, self.get_img)
+        # -- subscribers -- gonna just read raw_img 
+        self.sub_img = rospy.Subscriber(f'/{self.veh}/camera_node/image/compressed', CompressedImage, self.get_img, queue_size = 1)
 
         # -- publisher -- 
         self.pub_img_testing = rospy.Publisher(f'/{self.veh}/{node_name}/image/compressed', CompressedImage, queue_size=1)
         self.pub_twist = rospy.Publisher(f'/{self.veh}/car_cmd_switch_node/cmd', Twist2DStamped, queue_size=1)
 
 
-
     def get_img(self, msg):
         img = np.frombuffer(msg.data, np.uint8)
-        self.img_euclid  = cv2.imdecode(img, 1)     
+        self.img_raw  = cv2.imdecode(img, 1)     
 
 
     def region_of_interest(self, img, vertices):
@@ -51,6 +56,8 @@ class LaneTrackingNode(DTROS):
         
         # Returning the image only where mask pixels match
         masked_image = cv2.bitwise_and(img, img, mask=mask)
+
+        rospy.loginfo(masked_image.shape)
 
         return masked_image
 
@@ -85,16 +92,17 @@ class LaneTrackingNode(DTROS):
         # Return the modified image.
         return img
 
-    def get_centroids(self, img, num, min_lenght=-1):
+
+    def get_centroids(self, input_img, output_img, num, min_lenght=-1):
         # -- find contours on yellow line -- 
         contours, hierarchies = cv2.findContours(
-            img, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE
+            input_img, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE
         )
 
         centroids = []
 
         if len(contours) < num:
-            return
+            return [], output_img
 
         for i in range(num):
             M = cv2.moments(contours[i])
@@ -104,33 +112,49 @@ class LaneTrackingNode(DTROS):
                 cy = int(M['m01']/M['m00'])
 
                 if self.draw:
-                    cv2.drawContours(img, [contours[i]], -1, (0, 255, 0), 1)
-                    cv2.circle(img, (cx, cy), 2, (0, 0, 255), -1)
+                    rospy.loginfo(str(cx) + ' ' + str(cy))
+                    cv2.drawContours(output_img, [contours[i]], -1, (0, 255, 0), 2)
+                    cv2.circle(output_img, (cx, cy), 4, (255, 0, 0), -1)
 
                 if cv2.arcLength(contours[i], True) > min_lenght:
                     centroids.append([cx, cy])
 
-        return centroids, img
+        return centroids, output_img
 
 
     def find_lanes(self):
-        img = cv2.pyrDown(self.img_euclid)
+        img = self.img_raw            
         (h, w, _) = img.shape
 
-        yellow_HSV_filter =  {'hMin':21, 'sMin':68, 'vMin':0, 'hMax':111, 'sMax':201, 'vMax':255}
-        white_HSV_filter = {'hMin':103, 'sMin':0, 'vMin':141, 'hMax':132, 'sMax':44, 'vMax':255}
+        yellow_HSV_filter =  {'hMin':22, 'sMin':79, 'vMin':0, 'hMax':36, 'sMax':255, 'vMax':255}
+        white_HSV_filter = {'hMin':106, 'sMin':0, 'vMin':122, 'hMax':128, 'sMax':42, 'vMax':255}
 
         yellow_img = self.HSV_filter(img, yellow_HSV_filter)
+        yellow_img_blur = cv2.GaussianBlur(yellow_img, (5,5), 0)
 
-        centroids_yellow, img = self.get_centroids(yellow_img, 2)
+        kernel = np.ones((5,5), np.uint8)
+
+        yellow_img = cv2.erode(yellow_img_blur, kernel, iterations=2)
+
+        centroids_yellow, img = self.get_centroids(yellow_img, img, 2)
 
         if centroids_yellow is None:
-            pass
+            self.display_img(img)
+            return 0, 0
+        
+        elif len(centroids_yellow) < 2:
+            self.display_img(img)
+            return 0, 0
 
         # == lines to draw ==
         # -- line connecting centroids -- 
         centroid_line = [centroids_yellow[0][0], centroids_yellow[0][1], centroids_yellow[1][0], centroids_yellow[1][1]]
-        slope = (centroid_line[3] - centroid_line[1]) / (centroid_line[2] - centroid_line[0])
+
+        if centroid_line[2] - centroid_line[0] == 0:
+            slope = 100
+
+        else:
+            slope = (centroid_line[3] - centroid_line[1]) / (centroid_line[2] - centroid_line[0])
 
         # -- inner side of yellow line -- 
         x1_yellow = centroids_yellow[0][0] + self.english*(-1) * self.yellow_line_offset
@@ -149,8 +173,8 @@ class LaneTrackingNode(DTROS):
         region_of_interest_vertices = [
             (50, centroids_yellow[0][1]),
             (w, centroids_yellow[0][1]),
-            (w, centroids_yellow[0][3]),
-            (50, centroids_yellow[0][3]),
+            (w, centroids_yellow[1][1]),
+            (50, centroids_yellow[1][1]),
         ]
 
         cropped_image = self.region_of_interest(
@@ -160,13 +184,28 @@ class LaneTrackingNode(DTROS):
 
         white_img = self.HSV_filter(cropped_image, white_HSV_filter)
 
-        centroids_white, img = self.get_centroids(white_img, 1, min_lenght=self.min_contour_lenght_white)
+        white_img_blur = cv2.GaussianBlur(white_img, (5,5), 0)
+        white_img = cv2.erode(white_img_blur, kernel, iterations=1)
 
+        centroids_white, img = self.get_centroids(white_img, img, 1, min_lenght=self.min_contour_lenght_white)
+
+        if centroids_white is None:
+            self.display_img(img)
+            return 0, 0
+        
+        if len(centroids_white) < 1:
+            self.display_img(img)
+            return 0, 0
+        
+        if len(centroids_white[0]) < 1:
+            self.display_img(img)
+            return 0, 0 
+        
         # -- horozontal road line -- 
         x1_road = (x1_yellow + x2_yellow) // 2
         y1_road = (y1_yellow + y2_yellow) // 2
-        x2_road = centroids_white[0] - self.horozontal_road_line_offset
-        y2_road = centroids_white[1]
+        x2_road = centroids_white[0][0] - self.horozontal_road_line_offset
+        y2_road = centroids_white[0][1]
         
         road_line = [x1_road, y1_road, x2_road, y2_road]
 
@@ -185,28 +224,40 @@ class LaneTrackingNode(DTROS):
                         y1_img_mid + self.road_marker_offset]
                         
         if self.draw:
-            cv2.circle(img, (w//2, y1_img_mid), 2, (0, 255, 0), -1)
-            cv2.circle(self.img, (x1_road_mid, y1_road_mid), 2, (255, 255, 0), -1)
+            cv2.circle(img, (w//2, y1_img_mid), 4, (0, 255, 0), -1)
+            cv2.circle(img, (x1_road_mid, y1_road_mid), 4, (0, 255, 255), -1)
 
-            cv2.line(img, (centroid_line[0], centroid_line[1]), (centroid_line[2], centroid_line[3]), color=[0, 0, 255], thickness=1)
+            cv2.line(img, (centroid_line[0], centroid_line[1]), (centroid_line[2], centroid_line[3]), color=[255, 0, 0], thickness=2)
 
-            cv2.line(img, (yellow_line[0], yellow_line[1]), (yellow_line[2], yellow_line[3]), color=[255, 0, 0], thickness=2)
-            cv2.line(img, (road_line[0], road_line[1]), (road_line[2], road_line[3]), color=[255, 0, 0], thickness=2)
+            cv2.line(img, (yellow_line[0], yellow_line[1]), (yellow_line[2], yellow_line[3]), color=[0, 0, 255], thickness=4)
+            cv2.line(img, (road_line[0], road_line[1]), (road_line[2], road_line[3]), color=[255, 0, 255], thickness=4)
 
-            cv2.line(img, (yellow_line_long[0], yellow_line_long[1]), (yellow_line_long[2], yellow_line_long[3]), color=[255, 0, 0], thickness=1)
+            cv2.line(img, (yellow_line_long[0], yellow_line_long[1]), (yellow_line_long[2], yellow_line_long[3]), color=[0, 0, 255], thickness=2)
 
-            cv2.line(img, (road_mid_line[0], road_mid_line[1]), (road_mid_line[2], road_mid_line[3]), color=[255, 255, 0], thickness=1)
-            cv2.line(img, (img_mid_line[0], img_mid_line[1]), (img_mid_line[2], img_mid_line[3]), color=[0, 0, 255], thickness=1)
+            cv2.line(img, (road_mid_line[0], road_mid_line[1]), (road_mid_line[2], road_mid_line[3]), color=[0, 255, 255], thickness=2)
+            cv2.line(img, (img_mid_line[0], img_mid_line[1]), (img_mid_line[2], img_mid_line[3]), color=[0, 255, 0], thickness=1)
 
+
+        lane_pose = x1_road_mid
+        target_pose = x1_img_mid
 
         self.display_img(img)
 
+        return lane_pose, target_pose
 
-        return x1_road_mid - x1_img_mid
 
+    def PID_Control(self, dt, current_value, target_value, last_error):
+        error = target_value - current_value
 
-    def PID_Control(self):
-        pass
+        # calculate P term 
+        P = self.proportionalGain * error
+
+        # calculate D term 
+        error_rate_of_change = (error - last_error) / dt
+        # D = self.derivativeGain * error_rate_of_change
+        D = 0
+
+        return P + D, error
 
 
     def display_img(self, img):
@@ -224,18 +275,30 @@ class LaneTrackingNode(DTROS):
 
 
     def run(self):
-        rate = rospy.Rate(1)
-
-        #self.move(self.linear_speed, 0)
+        rate = rospy.Rate(10)
+        dt, last_error = 0.1, 0
 
         while not rospy.is_shutdown():
-            if self.img_euclid is not None:
+            if self.img_raw is not None:
 
-                pid_signal = self.find_lanes()
+                lane_pose, target_pose = self.find_lanes()
+
+                omega, last_error = self.PID_Control(dt, lane_pose, target_pose, last_error)
+
+                self.move(0.3, omega)
 
                 rate.sleep()
 
-    
+
+    def on_shutdown(self):
+        try:
+            for _ in range(15):
+                self.move(0,0)
+
+        except Exception as e:
+            print(e)
+            super(LaneTrackingNode, self).on_shutdown()
+
 
 if __name__ == '__main__':
     # create the node
@@ -245,6 +308,5 @@ if __name__ == '__main__':
         node.run()
 
     except rospy.ROSInterruptException:
-        pass
-
+        pass 
 

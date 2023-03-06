@@ -48,16 +48,19 @@ class AugmentedRealityNode(DTROS):
                        decode_sharpening=0.25,
                        debug=0)
 
-        self.undistorted = None
 
-        # setup subscribers
+        # setup publisher
+        self.undistorted = None
         self.undistorted_color = None
     
-        # construct publisher
+        # setup subscriber
         self.sub_img = rospy.Subscriber(f'/{self.veh}/camera_node/image/compressed', CompressedImage, self.get_img, queue_size = 1)
+        self.sub_img_color = rospy.Subscriber(f'/{self.veh}/camera_node/image/compressed', CompressedImage, self.get_img_color, queue_size = 1)
 
         # construct publisher
         self.pub_img = rospy.Publisher(f'/{self.veh}/{node_name}/image/compressed', CompressedImage, queue_size=1)
+        self.pub_img_color = rospy.Publisher(f'/{self.veh}/{node_name}/image_color/compressed', CompressedImage, queue_size=1)
+
         self.pub_loc = rospy.Publisher(f'/{self.veh}/teleport', Pose, queue_size=1)
 
         # -- Proxy -- 
@@ -180,11 +183,14 @@ class AugmentedRealityNode(DTROS):
 
     def run(self):
         rate = rospy.Rate(1)
+        self.change_led_lights("white")
+
+
         while not rospy.is_shutdown():
             
             if self.undistorted is not None and self.undistorted_color is not None:
                 
-                self.detect_april()
+                #self.detect_april()
                 new_img = CompressedImage()
                 new_img.data = cv2.imencode('.jpg', self.undistorted)[1].tobytes()
                 self.pub_img.publish(new_img)
