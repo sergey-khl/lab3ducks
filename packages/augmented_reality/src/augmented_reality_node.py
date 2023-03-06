@@ -55,12 +55,11 @@ class AugmentedRealityNode(DTROS):
     
         # setup subscriber
         self.sub_img = rospy.Subscriber(f'/{self.veh}/camera_node/image/compressed', CompressedImage, self.get_img, queue_size = 1)
-        self.sub_img_color = rospy.Subscriber(f'/{self.veh}/camera_node/image/compressed', CompressedImage, self.get_img_color, queue_size = 1)
+        #self.sub_img = rospy.Subscriber(f'/{self.veh}/camera_node/image/compressed', CompressedImage, self.get_img_color, queue_size = 1)
 
         # construct publisher
         self.pub_img = rospy.Publisher(f'/{self.veh}/{node_name}/image/compressed', CompressedImage, queue_size=1)
-        self.pub_img_color = rospy.Publisher(f'/{self.veh}/{node_name}/image_color/compressed', CompressedImage, queue_size=1)
-
+        #self.pub_img_color = rospy.Publisher(f'/{self.veh}/{node_name}/color/compressed', CompressedImage, queue_size=1)
         self.pub_loc = rospy.Publisher(f'/{self.veh}/teleport', Pose, queue_size=1)
 
         # -- Proxy -- 
@@ -190,14 +189,14 @@ class AugmentedRealityNode(DTROS):
             
             if self.undistorted is not None and self.undistorted_color is not None:
                 
-                #self.detect_april()
+                self.detect_april()
                 new_img = CompressedImage()
                 new_img.data = cv2.imencode('.jpg', self.undistorted)[1].tobytes()
                 self.pub_img.publish(new_img)
 
-                new_img_c = CompressedImage()
-                new_img_c.data = cv2.imencode('.jpg', self.undistorted_color)[1].tobytes()
-                self.pub_img_color.publish(new_img_c)
+                # new_img_c = CompressedImage()
+                # new_img_c.data = cv2.imencode('.jpg', self.undistorted_color)[1].tobytes()
+                # self.pub_img_color.publish(new_img_c)
                 
                 rate.sleep()
                 # self._tf_listener.waitForTransform(f"{self.veh}/base", f"{self.veh}/at_153_static", rospy.Duration(4.0))
