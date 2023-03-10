@@ -19,7 +19,7 @@ dt-launchfile-init
 dt-exec roslaunch led_controller led_controller_node.launch veh:="$VEHICLE_NAME"
 dt-exec roslaunch deadreckoning deadreckoning_node.launch veh:="$VEHICLE_NAME"
 dt-exec roslaunch augmented_reality augmented_reality_node.launch veh:="$VEHICLE_NAME"
-dt-exec roslaunch lane_following lane_following.launch veh:="$VEHICLE_NAME"
+# dt-exec roslaunch lane_following lane_following.launch veh:="$VEHICLE_NAME"
 
 
 # ----------------------------------------------------------------------------

@@ -187,7 +187,7 @@ class AugmentedRealityNode(DTROS):
 
         while not rospy.is_shutdown():
             
-            if self.undistorted is not None and self.undistorted_color is not None:
+            if self.undistorted is not None:
                 
                 self.detect_april()
                 new_img = CompressedImage()
